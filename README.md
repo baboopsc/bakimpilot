@@ -65,7 +65,7 @@ npm run dev     # http://localhost:3000 (proxies /api to Django on :8000)
 
 | What | Command | Where |
 |---|---|---|
-| Backend unit/integration (real Postgres) | `cd backend && pytest` |  tests |
+| Backend unit/integration (real Postgres) | `cd backend && pytest` | 114 tests |
 | Frontend unit | `cd frontend && npm test` | Vitest |
 | End-to-end (real browser, real stack) | `cd frontend && npm run e2e` | Playwright |
 | Counter integrity on live data | `python manage.py verify_counters` | |
