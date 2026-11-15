@@ -66,3 +66,9 @@ def test_deleting_a_user_only_deactivates(admin_client, technician):
     assert admin_client.delete(f"/api/users/{technician.pk}/").status_code == 204
     technician.refresh_from_db()
     assert technician.is_active is False
+
+
+def test_planner_can_list_technicians_for_assignment(planner_client, technician, viewer):
+    res = planner_client.get("/api/technicians/")
+    assert res.status_code == 200
+    assert [u["username"] for u in res.data] == ["technician"]

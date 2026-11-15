@@ -31,3 +31,11 @@ API docs (Swagger): http://localhost:8000/api/docs/
 python manage.py seed_demo --reset   # wipes the DB, then builds a demo fleet
 ```
 Users: `admin`, `planner`, `tech`, `tech2`, `viewer`, all with password `BakimPilot2026!` (demo only).
+
+## Run the frontend
+
+```bash
+cd frontend
+npm install
+npm run dev     # http://localhost:3000 (proxies /api to Django on :8000)
+```

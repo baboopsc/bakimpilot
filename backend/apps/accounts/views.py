@@ -94,6 +94,14 @@ class MeView(APIView):
         return Response(MeSerializer(request.user).data)
 
 
+class TechnicianListView(APIView):
+    """Active technicians, for assignment dropdowns. Planners need this; full user admin stays ADMIN-only."""
+
+    def get(self, request):
+        techs = User.objects.filter(role="TECHNICIAN", is_active=True).order_by("username")
+        return Response(MeSerializer(techs, many=True).data)
+
+
 class UserViewSet(viewsets.ModelViewSet):
     """User management: ADMIN only, for reads and writes."""
 

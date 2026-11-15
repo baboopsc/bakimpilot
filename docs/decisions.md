@@ -345,3 +345,53 @@ grounding work orders as a GROUNDED reason.)
   explanation and ordered checks, always marked **advisory**: certifying
   staff, not the AI, decide airworthiness. A daily Celery job turns detected
   anomalies into deduplicated ANOMALY alerts.
+
+## D-027 — Frontend: client-rendered app behind a same-origin proxy, TanStack Query for server state
+- **Alternatives:** server components fetching from Django with the user's
+  token; Redux/Zustand for data; calling Django directly from the browser
+  with CORS.
+- **Why:** every screen is behind a login and shows per-user, fast-changing
+  data, so there's little to gain from server-rendering it. Pages are client
+  components; **TanStack Query** owns server state: caching, background
+  refetch (the dashboard refreshes every 60 s and on tab focus), retries, and
+  invalidation after mutations (logging a flight invalidates everything,
+  because counters move every derived view). There's no global store: almost
+  all "state" is server state, and the little UI state lives in components.
+  Next.js **rewrites** `/api/*` to Django, so the browser talks to one origin.
+  That makes the httpOnly, `SameSite=Strict` refresh cookie work without
+  CORS, and the backend URL is never exposed to the browser. The access token
+  is kept **in memory only**. On a 401 the client refreshes once and retries;
+  parallel 401s share one refresh request (unit-tested). Opening a manual PDF
+  fetches it with the token and opens a blob URL at `#page=N`, because a plain
+  link can't carry an in-memory token.
+- **UI rules:** status is always icon + text, never colour alone; semantic
+  colour tokens (dark ops theme by default, light theme available); visible
+  focus rings; reduced-motion respected; the chart has a screen-reader table.
+  The demo exercises role-based UI (a viewer sees no write buttons), but the
+  **server** is the security boundary. Hiding a button is convenience, not
+  protection.
+
+## D-028 — Next.js 16 Cache Components: Suspense around session-dependent UI
+- **What happened:** `next build` failed: with Cache Components, reading the
+  URL (`usePathname`, `useSearchParams`) outside `<Suspense>` blocks
+  prerendering. The fix was structural: the authenticated shell sits inside
+  `<Suspense>` (the static shell is a spinner), and `loading.tsx` gives each
+  page its own boundary below the layout. Routes in the `(app)` group set
+  `instant = false`: the docs' documented opt-out for session-gated routes,
+  which Next can't verify as instant because only the browser knows the
+  session. Lesson kept: **run the production build in CI**. Dev mode didn't
+  show this.
+
+## D-029 — Test pyramid: pytest (most), Vitest (client logic), Playwright (critical journeys)
+- **Alternatives:** only unit tests; only E2E; Cypress.
+- **Why:** the safety-critical rules live in the backend, so most tests are
+  pytest against real PostgreSQL (rule engine boundaries, concurrency, DB
+  constraints, permissions). Vitest covers the tricky client code (token
+  refresh, error messages). Playwright drives a real browser through the
+  journeys that must never break: login and session restore, role-based UI,
+  the full **create → technician signs → inspector certifies** work order,
+  and the AI assistant. E2E found a real issue during development (the login
+  rate limit tripping on rapid logins), handled by showing a clear
+  "too many attempts" message and a configurable `LOGIN_THROTTLE`.
+  Playwright was chosen over Cypress for multi-user flows in one test,
+  first-class tracing, and parallel CI support.

@@ -4,7 +4,7 @@ from django.http import JsonResponse
 from django.urls import include, path
 from drf_spectacular.views import SpectacularAPIView, SpectacularSwaggerView
 
-from apps.accounts.views import LoginView, LogoutView, MeView, RefreshView
+from apps.accounts.views import LoginView, LogoutView, MeView, RefreshView, TechnicianListView
 from apps.ai.views import AnomalyListView, AskManualsView, ExplainAnomalyView, NLQueryView
 from apps.dashboard.views import DashboardView
 from apps.maintenance.views import AirworthinessView, DueListView
@@ -26,6 +26,7 @@ urlpatterns = [
     path("api/auth/refresh/", RefreshView.as_view()),
     path("api/auth/logout/", LogoutView.as_view()),
     path("api/auth/me/", MeView.as_view()),
+    path("api/technicians/", TechnicianListView.as_view()),
     path("api/schema/", SpectacularAPIView.as_view(), name="schema"),
     path("api/docs/", SpectacularSwaggerView.as_view(url_name="schema")),
     path("api/ai/ask/", AskManualsView.as_view()),
