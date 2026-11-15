@@ -3,6 +3,7 @@
 from rest_framework.routers import DefaultRouter
 
 from apps.accounts.views import UserViewSet
+from apps.ai.views import AIRequestLogViewSet, ManualDocumentViewSet
 from apps.alerts.views import AlertViewSet
 from apps.audit.views import AuditLogViewSet
 from apps.fleet.views import (
@@ -30,3 +31,5 @@ router.register("alerts", AlertViewSet, basename="alert")
 router.register("work-orders", WorkOrderViewSet, basename="work-order")
 router.register("spare-parts", SparePartViewSet, basename="spare-part")
 router.register("stock-movements", StockMovementViewSet, basename="stock-movement")
+router.register("ai/documents", ManualDocumentViewSet, basename="manual")
+router.register("ai/logs", AIRequestLogViewSet, basename="ai-log")

@@ -11,3 +11,4 @@ celery==5.7.0
 redis==8.1.0
 pypdf==7.1.0
 gunicorn==27.0.1
+anthropic==2.8.0

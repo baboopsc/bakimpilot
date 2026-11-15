@@ -9,16 +9,22 @@ alerts and signatures are exactly what real usage would produce.
 Deterministic: the same random seed gives the same fleet every time.
 """
 
+import hashlib
 import random
 from datetime import date, datetime, time, timedelta
 from decimal import Decimal
 
+from django.core.files.base import ContentFile
 from django.core.management import call_command
 from django.core.management.base import BaseCommand, CommandError
 from django.db import transaction
 from django.utils import timezone
 
 from apps.accounts.models import Role, User
+from apps.ai import rag
+from apps.ai.models import ManualDocument
+from apps.ai.pdfgen import build_pdf
+from apps.ai.tasks import run_anomaly_scan
 from apps.alerts.tasks import run_due_check, run_stock_check
 from apps.fleet import services as fleet
 from apps.fleet.models import Aircraft, PartType
@@ -156,8 +162,10 @@ class Command(BaseCommand):
             self._baselines(aircraft, users["planner"])
             self._spares(users["planner"])
             self._work_orders(aircraft, users)
+        self._manual(users["planner"])
         run_due_check()
         run_stock_check()
+        run_anomaly_scan()
         self.stdout.write(
             self.style.SUCCESS(
                 f"Demo data ready. Log in as admin / planner / tech / tech2 / viewer with password {DEMO_PASSWORD}"
@@ -384,3 +392,62 @@ class Command(BaseCommand):
                 "Review vibration spectrum",
             ],
         )
+
+    def _manual(self, planner):
+        """A small fictional manual so the RAG assistant has something to answer from."""
+        pdf = build_pdf(DEMO_MANUAL)
+        doc = ManualDocument(
+            title="TB2 Line Maintenance Manual (demo)",
+            aircraft_model="TB2",
+            uploaded_by=planner,
+            sha256=hashlib.sha256(pdf).hexdigest(),
+        )
+        doc.file.save("tb2-line-maintenance-demo.pdf", ContentFile(pdf), save=True)
+        rag.ingest(doc)
+
+
+DEMO_MANUAL = [
+    [
+        "TB2 LINE MAINTENANCE MANUAL - DEMO EDITION (fictional data for software demonstration)",
+        "",
+        "Chapter 1 - General safety",
+        "1.1 Disconnect the 28V main battery before any work on the engine or avionics.",
+        "1.2 Two-person rule: every task in this manual must be inspected by a person other than",
+        "the technician who performed it before the aircraft is released to service.",
+        "1.3 Ground the aircraft immediately if any limit in this manual is exceeded.",
+    ],
+    [
+        "Chapter 2 - Engine oil change (task ENG-100H)",
+        "2.1 Interval: every 100 flight hours or 180 days, whichever comes first.",
+        "2.2 Run the engine for 3 minutes so the oil is warm, then shut down.",
+        "2.3 Remove the drain plug and drain the oil into an approved container.",
+        "2.4 Take a 50 ml oil sample for spectrometric analysis.",
+        "2.5 Replace the oil filter (part number FLT-OIL). Lightly oil the new gasket.",
+        "2.6 Torque the oil drain plug to 25 Nm and secure it with lock wire.",
+        "2.7 Refill with 3.2 litres of 15W-50 aviation oil.",
+        "2.8 Run the engine for 5 minutes and check for leaks.",
+    ],
+    [
+        "Chapter 3 - Propeller",
+        "3.1 Maximum allowed propeller vibration is 0.55 g at cruise power.",
+        "3.2 If average vibration exceeds 0.55 g on two consecutive flights, perform a dynamic",
+        "balance check (task PRP-200H) before the next flight.",
+        "3.3 Inspect blades for nicks deeper than 0.5 mm; blend out or replace the propeller.",
+        "3.4 Propeller bolts (PRP-BOLT) must be torqued to 18 Nm in a cross pattern.",
+        "3.5 Propeller life limit: 600 flight hours or 4 years, whichever comes first.",
+    ],
+    [
+        "Chapter 4 - Engine temperature",
+        "4.1 Normal maximum engine temperature in cruise is 90 to 102 degrees C.",
+        "4.2 Above 110 degrees C: land as soon as practical and inspect the cooling inlets.",
+        "4.3 A gradual rise over several flights often indicates low oil level or blocked baffles.",
+        "4.4 Verify the temperature sensor before replacing engine parts: compare with a",
+        "calibrated handheld thermometer.",
+    ],
+    [
+        "Chapter 5 - 28V main battery",
+        "5.1 Battery calendar life is 365 days from manufacture date, regardless of use.",
+        "5.2 Capacity test every 90 days; replace if capacity is below 80 percent.",
+        "5.3 Store spare batteries at 15 to 25 degrees C with 50 percent charge.",
+    ],
+]

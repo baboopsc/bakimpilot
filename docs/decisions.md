@@ -260,3 +260,88 @@ grounding work orders as a GROUNDED reason.)
   verify cleanly (`verify_counters`), and the audit log looks like real use.
   It's deterministic (fixed random seed). One aircraft (TB2-T003) gets a
   creeping vibration/temperature trend for the anomaly detector to find.
+
+## D-022 — AI behind a provider interface; "mock" = a deterministic implementation
+- **Alternatives:** call the LLM SDK directly in each feature; a framework such
+  as LangChain; a mock that returns canned strings.
+- **Why:** the brief requires a configurable provider and a demo/test suite that
+  runs with no API key. Each AI feature has two implementations:
+  1. an **LLM path** (`LLM_PROVIDER=anthropic`: Claude via the official SDK), and
+  2. a **deterministic path** that's genuinely useful on its own: extractive
+     answers with citations, a rule-based query parser that understands Turkish
+     and English, template explanations of anomalies.
+
+  `LLM_PROVIDER=mock` selects path 2. The same path is the **fallback** when
+  the LLM fails (outage, rate limit, refusal), and the response is marked
+  `degraded: true`. The maintenance app never stops working because an AI
+  vendor is down. A framework like LangChain was rejected: three features
+  need one `complete()` and one `complete_json()` call, and owning ~100 lines
+  is easier to explain and test than a large dependency.
+  Claude settings: `claude-opus-5-5`, effort `medium` set explicitly,
+  structured outputs (JSON schema) for the query parser, and server-side
+  refusal fallbacks (`fallbacks="default"`), so a declined request is retried
+  on a fallback model within the same call. Tests stub the SDK client and check
+  the exact request shape, so they never touch the network.
+  Every AI call is logged (`AIRequestLog`: user, feature, provider, latency,
+  tokens, degraded), and the AI endpoints have their own per-user throttle
+  because LLM calls cost money.
+
+## D-023 — pgvector with a fixed 384-dimension column; offline hashing embeddings
+- **Alternatives:** a separate vector database (Pinecone, Qdrant, Chroma);
+  semantic embeddings from an API from day one.
+- **Why:** pgvector keeps vectors in the same PostgreSQL as everything else: one
+  backup, one transaction, and SQL joins to documents/permissions. Search uses
+  cosine distance with an **HNSW index** (approximate nearest neighbour), so it
+  stays fast as manuals grow. The vector dimension is part of the column type,
+  so it's fixed in settings (`EMBEDDING_DIM = 384`). Switching to a model with
+  another dimension means a migration plus re-ingesting (`/reingest/`).
+  The offline embedder uses the hashing trick over words and word pairs. It
+  matches **shared words, not meaning**. Measured on the demo manual, a
+  Turkish question about an English page scores 0.09 vs 0.08 for an unrelated
+  question, so cross-language search needs a real multilingual embedding
+  model. That's the known limitation, and the reason the provider sits behind
+  an interface. Anthropic doesn't offer an embeddings endpoint; adding a
+  semantic provider (e.g. Voyage AI, or a local sentence-transformers model) is
+  one class in `providers.py`.
+
+## D-024 — RAG: page-bounded chunks, numbered sources, validated citations
+- **Alternatives:** chunk the whole document as one stream; let the model cite freely.
+- **Why:** technicians need to open the page the answer came from. Chunks
+  (~900 characters, 150 overlap) never cross a page boundary, so every hit
+  has exactly one page number. The model receives numbered excerpts, must
+  answer only from them, must quote limits exactly, and must say "not covered"
+  rather than fill gaps from general knowledge. A wrong torque value is a
+  safety issue. After the answer, every `[n]` is checked against the excerpts
+  actually sent; invented citations are dropped (tested). If the best match is
+  below a similarity threshold, the system answers "not found" without calling
+  the LLM at all. Upload safety: content is checked for the `%PDF-` signature
+  (not just the file name), size is capped at 25 MB, duplicate files are
+  rejected by SHA-256, and ingestion runs in Celery so big PDFs don't block
+  a web worker.
+
+## D-025 — Natural-language queries: the LLM fills a whitelisted spec, never SQL
+- **Alternatives:** text-to-SQL (the LLM writes SQL that we execute).
+- **Why:** text-to-SQL can be manipulated by prompt injection ("…; DROP TABLE"),
+  can read tables the user shouldn't see, and produces queries nobody has
+  tested. Here the model can only choose one of 7 entities and fill named
+  filters (JSON schema enforced by structured outputs). `normalise()` re-checks
+  the output anyway (never trust model output). Our ORM code runs the query,
+  read-only. The interpreted spec and a one-line explanation are returned with
+  the rows, so a misunderstanding is visible. Without an LLM, a keyword parser
+  covers the common questions in Turkish and English.
+
+## D-026 — Anomalies are detected by statistics; the LLM only explains them
+- **Alternatives:** ask the LLM to find anomalies in raw flight data; ML models
+  (isolation forest, LSTM).
+- **Why:** detection must be deterministic, explainable and testable. A
+  language model can't be trusted to notice (or not invent) a 3-sigma shift.
+  We use a **robust z-score** (median and MAD instead of mean and standard
+  deviation, so a single broken sensor reading in the baseline doesn't hide a
+  real change). The last 5 flights are compared with the 30 before them.
+  Flagged when ≥ 2 of the 5 exceed |z| > 3.5: one spike is treated as noise, a
+  trend is not (both cases tested). An ML model would need labelled failure data
+  we don't have. The LLM's job is narrow: turn the numbers plus aircraft
+  context (installed parts, recent work orders) into a plain-language
+  explanation and ordered checks, always marked **advisory**: certifying
+  staff, not the AI, decide airworthiness. A daily Celery job turns detected
+  anomalies into deduplicated ANOMALY alerts.

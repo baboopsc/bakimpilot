@@ -7,10 +7,11 @@ from apps.accounts.models import Role, User
 
 
 @pytest.fixture(autouse=True)
-def _test_settings(settings):
+def _test_settings(settings, tmp_path):
     settings.CELERY_TASK_ALWAYS_EAGER = True
     settings.LLM_PROVIDER = "mock"
     settings.EMBEDDING_PROVIDER = "mock"
+    settings.MEDIA_ROOT = tmp_path / "media"  # uploaded test PDFs never land in the repo
     # Real password hashing is deliberately slow; tests don't need that.
     settings.PASSWORD_HASHERS = ["django.contrib.auth.hashers.MD5PasswordHasher"]
 

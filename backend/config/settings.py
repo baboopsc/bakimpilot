@@ -160,6 +160,10 @@ CELERY_BEAT_SCHEDULE = {
         "task": "apps.alerts.tasks.run_due_check",
         "schedule": crontab(minute=0),
     },
+    "anomaly-scan-daily": {
+        "task": "apps.ai.tasks.run_anomaly_scan",
+        "schedule": crontab(minute=30, hour=6),
+    },
     "stock-check-daily": {
         "task": "apps.alerts.tasks.run_stock_check",
         "schedule": crontab(minute=15, hour=6),
@@ -171,12 +175,11 @@ CELERY_BEAT_SCHEDULE = {
 MAINTENANCE_DUE_SOON_RATIO = env.float("MAINTENANCE_DUE_SOON_RATIO", default=0.9)
 
 # --- AI -------------------------------------------------------------------
-LLM_PROVIDER = env("LLM_PROVIDER", default="mock")  # mock | anthropic | openai
+LLM_PROVIDER = env("LLM_PROVIDER", default="mock")  # mock | anthropic
 LLM_MODEL = env("LLM_MODEL", default="")
-LLM_API_KEY = env("LLM_API_KEY", default="")
+LLM_API_KEY = env("LLM_API_KEY", default="")  # empty → SDK falls back to ANTHROPIC_API_KEY
 LLM_BASE_URL = env("LLM_BASE_URL", default="")
-EMBEDDING_PROVIDER = env("EMBEDDING_PROVIDER", default="mock")  # mock | openai
-EMBEDDING_MODEL = env("EMBEDDING_MODEL", default="")
+EMBEDDING_PROVIDER = env("EMBEDDING_PROVIDER", default="mock")  # mock (see D-023)
 EMBEDDING_DIM = 384  # fixed: it is baked into the database column (D-023)
 
 LOGGING = {
