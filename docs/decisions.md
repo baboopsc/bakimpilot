@@ -395,3 +395,40 @@ grounding work orders as a GROUNDED reason.)
   "too many attempts" message and a configurable `LOGIN_THROTTLE`.
   Playwright was chosen over Cypress for multi-user flows in one test,
   first-class tracing, and parallel CI support.
+
+## D-030 — One backend image for API, worker and beat; Compose for the whole stack
+- **Alternatives:** separate images per process; Kubernetes.
+- **Why:** the API, the Celery worker and Celery beat run the same code with
+  different commands, so one image keeps them in lock-step (no version
+  skew). The Dockerfile installs dependencies before copying code (layer
+  caching), collects static files at build time (served by WhiteNoise, no
+  separate file server), runs as a **non-root** user and has a health check.
+  The frontend uses a multi-stage build with Next's `standalone` output, so
+  the final image has no dev dependencies. Migrations run in a one-shot
+  `migrate` service that the others wait for
+  (`service_completed_successfully`), so a new release never serves requests
+  against an old schema. Compose is enough for one server; Kubernetes would
+  add a lot of operational surface for no benefit at this scale.
+  Running the built images during development caught a **real production
+  bug**: Celery's Redis transport needs `packaging`, which was only installed
+  locally as a side effect of pytest. It's now pinned in `requirements.txt`.
+
+## D-031 — CI: four jobs, from fast feedback to full stack
+- **Why:** `backend` (ruff, migrations-up-to-date check, Django deploy checks,
+  pytest on real Postgres+pgvector) and `frontend` (lint, types, Vitest,
+  production build) run in parallel for fast feedback. `e2e` starts the real
+  API with demo data and runs Playwright against the **production** Next
+  build. `docker` builds every image, starts the full Compose stack, and
+  smoke-tests it, including a Celery job through Redis. The pipeline checks
+  the deployable artifact, not just the source. A failing E2E run uploads the
+  Playwright trace and API log as artifacts.
+
+## D-032 — Deployment: single VM + Caddy (documented, not automated yet)
+- **Alternatives:** a PaaS (Render/Railway/Fly); Kubernetes; managed DB.
+- **Why:** the stack needs PostgreSQL **with pgvector**, Redis, a worker and a
+  scheduler, which is awkward or costly on many free PaaS tiers but simple on one
+  VM with Compose. Caddy gives automatic HTTPS, HSTS and the HTTP→HTTPS
+  redirect (which is why Django's own HSTS/redirect checks are silenced).
+  Continuous deployment (CI → server) is left out on purpose: it needs a
+  server and secrets that belong to the owner, and pushing/deploying is the
+  owner's decision. See `docs/deploy.md`.

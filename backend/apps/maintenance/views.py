@@ -1,3 +1,4 @@
+from drf_spectacular.utils import extend_schema
 from rest_framework import mixins, viewsets
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -52,6 +53,7 @@ class DueListView(APIView):
     Computed live from current counters; nothing is cached, so it's never stale.
     """
 
+    @extend_schema(responses=DueItemSerializer(many=True))
     def get(self, request):
         items = engine.compute_due_items(aircraft_ids=_aircraft_filter(request))
         wanted = request.query_params.get("status")
@@ -64,6 +66,7 @@ class DueListView(APIView):
 class AirworthinessView(APIView):
     """GET /api/airworthiness/?aircraft=<id> → per-aircraft status with reasons."""
 
+    @extend_schema(responses=AirworthinessSerializer(many=True))
     def get(self, request):
         statuses = engine.fleet_airworthiness(aircraft_ids=_aircraft_filter(request))
         return Response(AirworthinessSerializer([s.__dict__ for s in statuses], many=True).data)

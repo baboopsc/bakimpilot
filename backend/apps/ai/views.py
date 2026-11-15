@@ -3,6 +3,8 @@ import time
 
 from django.db import transaction
 from django.http import FileResponse
+from drf_spectacular.types import OpenApiTypes
+from drf_spectacular.utils import extend_schema
 from rest_framework import mixins, serializers, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.parsers import FormParser, MultiPartParser
@@ -124,6 +126,7 @@ class AskManualsView(APIView):
     throttle_classes = [AIThrottle]
     write_roles = ANY_ROLE
 
+    @extend_schema(request=QuestionSerializer, responses=OpenApiTypes.OBJECT)
     def post(self, request):
         data = QuestionSerializer(data=request.data)
         data.is_valid(raise_exception=True)
@@ -142,6 +145,7 @@ class NLQueryView(APIView):
     throttle_classes = [AIThrottle]
     write_roles = ANY_ROLE
 
+    @extend_schema(request=QuestionSerializer, responses=OpenApiTypes.OBJECT)
     def post(self, request):
         data = QuestionSerializer(data=request.data)
         data.is_valid(raise_exception=True)
@@ -154,6 +158,7 @@ class NLQueryView(APIView):
 class AnomalyListView(APIView):
     """GET /api/ai/anomalies/?aircraft=<id> — statistically unusual flight data (no LLM involved)."""
 
+    @extend_schema(responses=OpenApiTypes.OBJECT)
     def get(self, request):
         aircraft_id = request.query_params.get("aircraft")
         qs = Aircraft.objects.filter(status=Aircraft.Status.ACTIVE)
@@ -175,6 +180,7 @@ class ExplainAnomalyView(APIView):
     throttle_classes = [AIThrottle]
     write_roles = ANY_ROLE
 
+    @extend_schema(request=ExplainSerializer, responses=OpenApiTypes.OBJECT)
     def post(self, request):
         data = ExplainSerializer(data=request.data)
         data.is_valid(raise_exception=True)

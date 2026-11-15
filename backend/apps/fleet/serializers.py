@@ -96,7 +96,7 @@ class ComponentSerializer(serializers.ModelSerializer):
             "position": inst.position,
         }
 
-    def get_life_remaining(self, obj):
+    def get_life_remaining(self, obj) -> dict:
         rem = life_remaining(obj)
         return {"hours": rem.hours, "cycles": rem.cycles, "days": rem.days, "expired": rem.expired}
 

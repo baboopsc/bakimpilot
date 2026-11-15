@@ -1,0 +1,24 @@
+# Production override: adds Caddy for HTTPS (automatic Let's Encrypt certificates)
+# and stops publishing internal ports. Usage on the server:
+#   docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
+services:
+  api:
+    ports: !reset []
+    environment:
+      DJANGO_ALLOWED_HOSTS: ${DOMAIN:?set DOMAIN in .env},api
+      DJANGO_CSRF_TRUSTED_ORIGINS: https://${DOMAIN}
+  web:
+    ports: !reset []
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports: ["80:80", "443:443"]
+    environment:
+      DOMAIN: ${DOMAIN}
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+    depends_on: [web, api]
+
+volumes:
+  caddy_data:

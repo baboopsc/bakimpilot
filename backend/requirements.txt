@@ -7,8 +7,10 @@ django-environ==0.14.0
 drf-spectacular==0.30.0
 psycopg[binary]==3.3.9
 pgvector==0.5.1
-celery==5.7.0
+celery[redis]==5.7.0
 redis==8.1.0
 pypdf==7.1.0
 gunicorn==27.0.1
 anthropic==2.8.0
+whitenoise==6.12.0
+packaging==26.3  # needed by kombu's redis transport (found by the container smoke test)

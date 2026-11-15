@@ -7,7 +7,8 @@ the frontend keeps it in memory only. D-005.
 """
 
 from django.conf import settings
-from rest_framework import permissions, status, viewsets
+from drf_spectacular.utils import extend_schema, inline_serializer
+from rest_framework import permissions, serializers, status, viewsets
 from rest_framework.exceptions import AuthenticationFailed
 from rest_framework.response import Response
 from rest_framework.throttling import ScopedRateThrottle
@@ -41,6 +42,14 @@ class LoginView(APIView):
     throttle_classes = [ScopedRateThrottle]
     throttle_scope = "login"
 
+    @extend_schema(
+        request=inline_serializer(
+            "LoginRequest", {"username": serializers.CharField(), "password": serializers.CharField()}
+        ),
+        responses=inline_serializer(
+            "LoginResponse", {"access": serializers.CharField(), "user": MeSerializer()}
+        ),
+    )
     def post(self, request):
         serializer = TokenObtainPairSerializer(data=request.data)
         try:
@@ -58,6 +67,9 @@ class RefreshView(APIView):
     permission_classes = [permissions.AllowAny]
     authentication_classes: list = []
 
+    @extend_schema(
+        request=None, responses=inline_serializer("RefreshResponse", {"access": serializers.CharField()})
+    )
     def post(self, request):
         token = request.COOKIES.get(settings.REFRESH_COOKIE_NAME)
         if not token:
@@ -77,6 +89,7 @@ class LogoutView(APIView):
     permission_classes = [permissions.AllowAny]
     authentication_classes: list = []
 
+    @extend_schema(request=None, responses={204: None})
     def post(self, request):
         token = request.COOKIES.get(settings.REFRESH_COOKIE_NAME)
         if token:
@@ -90,6 +103,7 @@ class LogoutView(APIView):
 
 
 class MeView(APIView):
+    @extend_schema(responses=MeSerializer)
     def get(self, request):
         return Response(MeSerializer(request.user).data)
 
@@ -97,6 +111,7 @@ class MeView(APIView):
 class TechnicianListView(APIView):
     """Active technicians, for assignment dropdowns. Planners need this; full user admin stays ADMIN-only."""
 
+    @extend_schema(responses=MeSerializer(many=True))
     def get(self, request):
         techs = User.objects.filter(role="TECHNICIAN", is_active=True).order_by("username")
         return Response(MeSerializer(techs, many=True).data)

@@ -9,6 +9,8 @@ from datetime import timedelta
 from django.db.models import Count, F, Sum
 from django.db.models.functions import TruncDate
 from django.utils import timezone
+from drf_spectacular.types import OpenApiTypes
+from drf_spectacular.utils import extend_schema
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
@@ -65,6 +67,7 @@ def timeline(items, today) -> list[dict]:
 
 
 class DashboardView(APIView):
+    @extend_schema(responses=OpenApiTypes.OBJECT)
     def get(self, request):
         today = timezone.localdate()
         items = engine.compute_due_items(today=today)

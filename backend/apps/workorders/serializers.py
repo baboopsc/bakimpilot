@@ -89,7 +89,7 @@ class WorkOrderSerializer(serializers.ModelSerializer):
             "cancel_reason",
         ]
 
-    def get_progress(self, obj):
+    def get_progress(self, obj) -> dict:
         items = list(obj.checklist.all())
         return {"done": sum(i.done for i in items), "total": len(items)}
 
