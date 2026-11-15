@@ -10,7 +10,7 @@ English) into safe queries, and explains statistically detected anomalies in
 flight data. It runs fully offline with a deterministic mock, or with Claude.
 
 **Stack:** Django 5.2 + DRF · PostgreSQL + pgvector · Celery + Redis ·
-Next.js 16 + TypeScript + TanStack Query · JWT (httpOnly refresh cookie) ·
+Next.js 16 + TypeScript + TanStack Query · Go (flight-data ingestion) · JWT (httpOnly refresh cookie) ·
 pytest, Vitest, Playwright · Docker Compose · GitHub Actions.
 
 - Why every choice was made: [`docs/decisions.md`](docs/decisions.md)
@@ -67,5 +67,6 @@ npm run dev     # http://localhost:3000 (proxies /api to Django on :8000)
 |---|---|---|
 | Backend unit/integration (real Postgres) | `cd backend && pytest` | 114 tests |
 | Frontend unit | `cd frontend && npm test` | Vitest |
+| Go ingestion service | `cd ingest && go test ./...` | 7 tests |
 | End-to-end (real browser, real stack) | `cd frontend && npm run e2e` | Playwright |
 | Counter integrity on live data | `python manage.py verify_counters` | |

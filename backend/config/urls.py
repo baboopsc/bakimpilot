@@ -7,6 +7,7 @@ from drf_spectacular.views import SpectacularAPIView, SpectacularSwaggerView
 from apps.accounts.views import LoginView, LogoutView, MeView, RefreshView, TechnicianListView
 from apps.ai.views import AnomalyListView, AskManualsView, ExplainAnomalyView, NLQueryView
 from apps.dashboard.views import DashboardView
+from apps.fleet.views import IngestFlightView
 from apps.maintenance.views import AirworthinessView, DueListView
 
 from .api import router
@@ -33,6 +34,7 @@ urlpatterns = [
     path("api/ai/query/", NLQueryView.as_view()),
     path("api/ai/anomalies/", AnomalyListView.as_view()),
     path("api/ai/anomalies/explain/", ExplainAnomalyView.as_view()),
+    path("api/ingest/flights/", IngestFlightView.as_view()),
     path("api/dashboard/", DashboardView.as_view()),
     path("api/due-items/", DueListView.as_view()),
     path("api/airworthiness/", AirworthinessView.as_view()),

@@ -69,6 +69,22 @@ jobs:
       - run: npm test
       - run: npm run build
 
+  ingest:
+    name: Go ingest service (vet + test)
+    runs-on: ubuntu-latest
+    defaults:
+      run: { working-directory: ingest }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.24"
+          cache-dependency-path: ingest/go.mod
+      - name: gofmt
+        run: test -z "$(gofmt -l .)"
+      - run: go vet ./...
+      - run: go test -race -count=1 ./...
+
   e2e:
     name: End-to-end (Playwright, real stack)
     needs: [backend, frontend]
@@ -129,11 +145,12 @@ jobs:
 
   docker:
     name: Docker images + compose smoke test
-    needs: [backend, frontend]
+    needs: [backend, frontend, ingest]
     runs-on: ubuntu-latest
     env:
       DJANGO_SECRET_KEY: ci-only-secret-key-not-used-anywhere-else
       POSTGRES_PASSWORD: ci-password
+      INGEST_TOKEN: ci-ingest-token
       DJANGO_ALLOWED_HOSTS: localhost,127.0.0.1,api
     steps:
       - uses: actions/checkout@v4
@@ -152,6 +169,7 @@ jobs:
           curl -sf -o /dev/null http://localhost:3000/login
           curl -sf http://localhost:3000/api/health/        # through the Next.js proxy
           docker compose run --rm api python manage.py seed_demo
+          curl -sf http://localhost:8080/healthz
           docker compose exec -T api python -c "import django,os;os.environ.setdefault('DJANGO_SETTINGS_MODULE','config.settings');django.setup();from apps.alerts.tasks import run_due_check;print(run_due_check.delay().get(timeout=60))"
       - if: always()
         run: docker compose logs --no-color | tail -200

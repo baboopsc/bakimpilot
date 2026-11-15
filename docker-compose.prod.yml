@@ -9,6 +9,9 @@ services:
       DJANGO_CSRF_TRUSTED_ORIGINS: https://${DOMAIN}
   web:
     ports: !reset []
+  ingest:
+    # Ground stations reach it over a VPN/private network, never the public internet.
+    ports: !reset ["127.0.0.1:8080:8080"]
   caddy:
     image: caddy:2-alpine
     restart: unless-stopped

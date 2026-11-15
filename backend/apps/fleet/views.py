@@ -3,10 +3,17 @@ Thin views: they validate input with a serializer, call a service function,
 and serialise the result. No business rules live here (D-007).
 """
 
+import hmac
+
+from django.conf import settings
+from django.db import IntegrityError
 from django.db.models import Prefetch
-from rest_framework import mixins, status, viewsets
+from drf_spectacular.utils import extend_schema
+from rest_framework import mixins, serializers, status, viewsets
 from rest_framework.decorators import action
+from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
+from rest_framework.views import APIView
 
 from apps.accounts.models import Role
 from apps.audit.services import record
@@ -153,3 +160,59 @@ class FlightLogViewSet(mixins.CreateModelMixin, viewsets.ReadOnlyModelViewSet):
 
     def perform_create(self, serializer):
         serializer.instance = services.log_flight(actor=self.request.user, **serializer.validated_data)
+
+
+# --- machine-to-machine ingestion (D-033) ---------------------------------------
+
+
+class IngestFlightSerializer(serializers.Serializer):
+    external_id = serializers.CharField(max_length=64)
+    tail_number = serializers.CharField(max_length=32)
+    takeoff_at = serializers.DateTimeField()
+    landing_at = serializers.DateTimeField()
+    cycles = serializers.IntegerField(min_value=1, default=1)
+    max_engine_temp_c = serializers.DecimalField(
+        max_digits=6, decimal_places=1, required=False, allow_null=True
+    )
+    avg_vibration_g = serializers.DecimalField(
+        max_digits=6, decimal_places=3, required=False, allow_null=True
+    )
+    fuel_used_l = serializers.DecimalField(max_digits=8, decimal_places=2, required=False, allow_null=True)
+    mission = serializers.CharField(max_length=128, required=False, allow_blank=True, default="")
+
+
+class IngestFlightView(APIView):
+    """
+    POST /api/ingest/flights/ from the flight-data ingestion service.
+
+    Authenticated with a shared service token (X-Ingest-Token), not a user
+    JWT: this is a machine, and it may only create flights. Idempotent on
+    `external_id`: the ingest service retries on network errors, and a retry
+    of a flight we already stored returns 200 instead of counting the hours twice.
+    """
+
+    authentication_classes: list = []
+    permission_classes = [AllowAny]  # checked below with the service token
+
+    @extend_schema(request=IngestFlightSerializer, responses=FlightLogSerializer)
+    def post(self, request):
+        expected = settings.INGEST_TOKEN
+        given = request.headers.get("X-Ingest-Token", "")
+        if not expected or not hmac.compare_digest(given.encode(), expected.encode()):
+            return Response({"detail": "Invalid ingest token."}, status=status.HTTP_401_UNAUTHORIZED)
+
+        data = IngestFlightSerializer(data=request.data)
+        data.is_valid(raise_exception=True)
+        v = dict(data.validated_data)
+        existing = FlightLog.objects.filter(external_id=v["external_id"]).first()
+        if existing:
+            return Response(FlightLogSerializer(existing).data, status=status.HTTP_200_OK)
+        aircraft = Aircraft.objects.filter(tail_number=v.pop("tail_number")).first()
+        if aircraft is None:
+            return Response({"detail": "Unknown tail number.", "code": "unknown_aircraft"}, status=400)
+        try:
+            flight = services.log_flight(actor=None, aircraft=aircraft, source="ingest", **v)
+        except IntegrityError:  # two retries raced: the other one stored it
+            flight = FlightLog.objects.get(external_id=v["external_id"])
+            return Response(FlightLogSerializer(flight).data, status=status.HTTP_200_OK)
+        return Response(FlightLogSerializer(flight).data, status=status.HTTP_201_CREATED)

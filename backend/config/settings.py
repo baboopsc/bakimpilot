@@ -179,6 +179,9 @@ CELERY_BEAT_SCHEDULE = {
 # An item is "due soon" when it has used up this share of its interval.
 MAINTENANCE_DUE_SOON_RATIO = env.float("MAINTENANCE_DUE_SOON_RATIO", default=0.9)
 
+# Shared secret for the flight-data ingestion service (empty = ingestion disabled).
+INGEST_TOKEN = env("INGEST_TOKEN", default="")
+
 # --- AI -------------------------------------------------------------------
 LLM_PROVIDER = env("LLM_PROVIDER", default="mock")  # mock | anthropic
 LLM_MODEL = env("LLM_MODEL", default="")

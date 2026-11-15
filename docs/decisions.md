@@ -432,3 +432,28 @@ grounding work orders as a GROUNDED reason.)
   Continuous deployment (CI → server) is left out on purpose: it needs a
   server and secrets that belong to the owner, and pushing/deploying is the
   owner's decision. See `docs/deploy.md`.
+
+## D-033 — Stretch: a Go service for flight-data ingestion
+- **Alternatives:** a Django endpoint that accepts raw telemetry; a Celery task
+  that parses uploads.
+- **Why:** raw telemetry is large (a 3-hour flight at 1 Hz is ~11,000 samples)
+  and arrives in bursts when several aircraft land. Parsing and aggregating it
+  is CPU work that would tie up gunicorn workers. A small Go service handles it
+  concurrently with low memory and ships as a ~10 MB distroless image (no shell,
+  non-root). It uses only the standard library. Django receives only the
+  summary it actually stores: take-off/landing, cycles (ground→air transitions,
+  so touch-and-goes count), max temperature, mean vibration, and fuel (trapezoid
+  integral of fuel flow, skipping telemetry dropouts so a gap isn't counted
+  as fuel burned).
+  **Reliability:** the Go service retries network errors, 5xx and 429 with
+  exponential backoff, but never 4xx (a validation error won't fix itself).
+  Retrying is only safe because the Django endpoint is **idempotent on
+  `external_id`**: a retry of a stored flight returns 200 and is not counted
+  twice. This was verified end to end in containers: 1,092 samples → one flight,
+  the second upload → `duplicate: true`, `verify_counters` clean.
+  **Security:** machine-to-machine auth with a shared token compared in
+  constant time (`hmac.compare_digest`). A user's JWT is not accepted on that
+  endpoint, and the token can only create flights. In production the port is
+  bound to localhost/VPN only. Flights still go through `log_flight`, so every
+  rule (no overlaps, no future flights, inactive aircraft rejected) applies to
+  ingested data exactly as to manual entry.
