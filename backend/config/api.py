@@ -3,6 +3,7 @@
 from rest_framework.routers import DefaultRouter
 
 from apps.accounts.views import UserViewSet
+from apps.alerts.views import AlertViewSet
 from apps.audit.views import AuditLogViewSet
 from apps.fleet.views import (
     AircraftViewSet,
@@ -11,6 +12,7 @@ from apps.fleet.views import (
     InstallationViewSet,
     PartTypeViewSet,
 )
+from apps.maintenance.views import MaintenanceRecordViewSet, MaintenanceRuleViewSet
 
 router = DefaultRouter()
 router.register("users", UserViewSet, basename="user")
@@ -20,3 +22,6 @@ router.register("part-types", PartTypeViewSet, basename="part-type")
 router.register("components", ComponentViewSet, basename="component")
 router.register("installations", InstallationViewSet, basename="installation")
 router.register("flights", FlightLogViewSet, basename="flight")
+router.register("maintenance-rules", MaintenanceRuleViewSet, basename="maintenance-rule")
+router.register("maintenance-records", MaintenanceRecordViewSet, basename="maintenance-record")
+router.register("alerts", AlertViewSet, basename="alert")

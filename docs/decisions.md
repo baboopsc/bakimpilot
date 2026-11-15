@@ -129,3 +129,55 @@ Newest entries at the bottom. IDs are referenced from code comments (e.g. `D-005
   them either. Technicians may log flights (they record post-flight data on
   the line), along with planners and admins. Flights in the future, overlapping
   flights, and flights on stored/retired aircraft are rejected.
+
+## D-014 — Due items are computed live; the arithmetic is a pure function
+- **Alternatives:** store a "next due" row per task and update it on every
+  flight / record; a rules library or a DSL for maintenance rules.
+- **Why:** a stored "next due" value is one more denormalised value that can go
+  stale (rule interval edited, back-dated flight, record deleted in the admin…).
+  Computing on read means the due list is *always* consistent with the current
+  counters and rules. It's still cheap: `compute_due_items` makes a fixed
+  number of queries however big the fleet is (a test asserts ≤ 5 queries for 15
+  aircraft), using PostgreSQL `DISTINCT ON` to fetch only the latest record per
+  task. The safety-critical arithmetic (`evaluate_measure`, `build_item`) touches
+  no database, so it's unit-tested exhaustively at the boundaries (44 h / 45 h /
+  50 h of a 50 h interval).
+  Rules model the real-world pattern **"every N hours / N cycles / N days,
+  whichever comes first"**: each set interval is checked separately and the worst
+  status wins. Hard life limits from `PartType` go through the same code path as
+  a special item kind (`LIFE_LIMIT`).
+- **Edge cases decided:**
+  * Never-done tasks count from new (aircraft in-service date / component
+    manufacture date, 0 h). This is conservative: a used component arriving
+    without a baseline record shows as due, which forces the planner to enter
+    when the task was last done (`POST /api/maintenance-records/`).
+  * Component tasks are tracked on the **component**, so the history follows the
+    part when it moves to another aircraft.
+  * "Due soon" = 90 % of the interval used (`MAINTENANCE_DUE_SOON_RATIO`).
+
+## D-015 — Projected due dates from 30-day utilisation; Celery beat for the clock
+- **Alternatives:** no projection; per-aircraft planned utilisation entered by hand.
+- **Why:** planners think in dates ("what's due in the next 30 days?"), but
+  most intervals are hours or cycles. Average daily flying over the last 30 days
+  turns "12 h remaining" into "~6 days". If the aircraft hasn't flown, no
+  projection is shown rather than a made-up one.
+  An hourly Celery beat job (`run_due_check`) re-evaluates the fleet, because
+  calendar limits expire without any event (no flight, no click) to trigger
+  them. Redis is the broker. It's a simple, well-known setup, and the same
+  Redis can later serve caching.
+
+## D-016 — Alerts are reconciled, de-duplicated, and auto-resolved
+- **Alternatives:** create a new alert every time the check finds a problem;
+  email notifications.
+- **Why:** an hourly check that inserts "aircraft X overdue" every hour trains
+  people to ignore alerts. Instead, `sync_alerts` compares the *current
+  problems* with the *open alerts*: new problem → open, gone → resolve,
+  DUE_SOON→OVERDUE → escalate (and clear the acknowledgement so someone looks
+  again). A partial unique index (`dedup_key WHERE resolved_at IS NULL`)
+  guarantees one open alert per problem. Running it twice changes nothing
+  (idempotent), so Celery retries are safe. Acknowledging means "I've seen it";
+  only fixing the problem resolves an alert.
+
+**Airworthiness rule:** GROUNDED if anything is overdue (task or life limit),
+ATTENTION if something is due soon, otherwise AIRWORTHY. (Phase 4 adds open
+grounding work orders as a GROUNDED reason.)

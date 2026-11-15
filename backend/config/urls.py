@@ -5,6 +5,7 @@ from django.urls import include, path
 from drf_spectacular.views import SpectacularAPIView, SpectacularSwaggerView
 
 from apps.accounts.views import LoginView, LogoutView, MeView, RefreshView
+from apps.maintenance.views import AirworthinessView, DueListView
 
 from .api import router
 
@@ -25,5 +26,7 @@ urlpatterns = [
     path("api/auth/me/", MeView.as_view()),
     path("api/schema/", SpectacularAPIView.as_view(), name="schema"),
     path("api/docs/", SpectacularSwaggerView.as_view(url_name="schema")),
+    path("api/due-items/", DueListView.as_view()),
+    path("api/airworthiness/", AirworthinessView.as_view()),
     path("api/", include(router.urls)),
 ]
