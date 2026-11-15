@@ -330,11 +330,24 @@ class AirworthinessStatus:
     due_soon: int
 
 
+def grounding_work_orders(aircraft_ids) -> dict[int, list[str]]:
+    """Open work orders flagged as grounding, per aircraft (one query)."""
+    from apps.workorders.models import WorkOrder  # local import: avoids a circular app import
+
+    out: dict[int, list[str]] = {}
+    open_grounding = WorkOrder.objects.filter(aircraft_id__in=aircraft_ids, grounding=True).exclude(
+        status__in=[WorkOrder.Status.CLOSED, WorkOrder.Status.CANCELLED]
+    )
+    for wo in open_grounding:
+        out.setdefault(wo.aircraft_id, []).append(f"Open grounding work order {wo.number}: {wo.title}")
+    return out
+
+
 def fleet_airworthiness(
     *, today: date | None = None, aircraft_ids=None, items=None
 ) -> list[AirworthinessStatus]:
     """
-    GROUNDED  — any overdue task or life limit.
+    GROUNDED  — any overdue task or life limit, or an open grounding work order.
     ATTENTION — airworthy, but something is due soon.
     AIRWORTHY — nothing pending.
     """
@@ -344,13 +357,14 @@ def fleet_airworthiness(
     if aircraft_ids is not None:
         fleet = fleet.filter(pk__in=aircraft_ids)
     fleet = list(fleet)
+    grounding = grounding_work_orders([a.pk for a in fleet])
 
     result = []
     for ac in fleet:
         mine = [i for i in items if i.aircraft_id == ac.pk]
         overdue = [i for i in mine if i.status == OVERDUE]
         soon = [i for i in mine if i.status == DUE_SOON]
-        reasons = [f"OVERDUE: {i.title}" for i in overdue]
+        reasons = [f"OVERDUE: {i.title}" for i in overdue] + grounding.get(ac.pk, [])
         if reasons:
             status = GROUNDED
         elif soon:

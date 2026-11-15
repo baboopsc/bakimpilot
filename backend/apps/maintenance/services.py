@@ -32,6 +32,7 @@ def record_compliance(
     hours_at: Decimal | None = None,
     cycles_at: int | None = None,
     notes: str = "",
+    work_order=None,
 ) -> MaintenanceRecord:
     """
     Record that `rule` was done. By default the current counters are snapshotted.
@@ -61,6 +62,7 @@ def record_compliance(
         cycles_at=cycles_at,
         performed_by=actor if actor and actor.is_authenticated else None,
         notes=notes,
+        work_order=work_order,
     )
     record(
         actor,

@@ -11,6 +11,8 @@ def _test_settings(settings):
     settings.CELERY_TASK_ALWAYS_EAGER = True
     settings.LLM_PROVIDER = "mock"
     settings.EMBEDDING_PROVIDER = "mock"
+    # Real password hashing is deliberately slow; tests don't need that.
+    settings.PASSWORD_HASHERS = ["django.contrib.auth.hashers.MD5PasswordHasher"]
 
 
 def _make_user(role: str) -> User:

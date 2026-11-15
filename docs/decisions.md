@@ -181,3 +181,43 @@ Newest entries at the bottom. IDs are referenced from code comments (e.g. `D-005
 **Airworthiness rule:** GROUNDED if anything is overdue (task or life limit),
 ATTENTION if something is due soon, otherwise AIRWORTHY. (Phase 4 adds open
 grounding work orders as a GROUNDED reason.)
+
+## D-017 — Work orders as an explicit state machine
+- **Alternatives:** a free-form `status` field anyone can PATCH; a workflow
+  library (django-fsm, viewflow).
+- **Why:** each status change has preconditions (checklist complete, the right
+  person, the right previous state) and side effects (audit entry, maintenance
+  record). Plain functions in `workorders/services.py` with an `ALLOWED_FROM`
+  table make every legal transition visible in ~10 lines, with no extra
+  dependency. The API has no way to set `status` directly; only actions
+  (`/start/`, `/sign-off/`, `/certify/`, …) move it.
+  ```
+  OPEN → IN_PROGRESS → AWAITING_INSPECTION → CLOSED
+                 ↖────── reject ──────┘
+  OPEN / IN_PROGRESS → CANCELLED
+  ```
+  Who does what: planners create, assign, certify, reject and cancel; only the
+  **assigned technician** starts the work, ticks the checklist and signs.
+  Work-order numbers come from the primary key (`WO-2026-00042`), which avoids
+  the race of "read the last number, add one" between two planners.
+  A closed work order linked to a rule automatically creates the
+  `MaintenanceRecord`, which resets that task in the due list, using the
+  counters captured at **technician sign-off**. That way, hours flown while
+  waiting for inspection still count toward the next interval.
+  Grounding work orders (e.g. a defect) make the aircraft GROUNDED until closed.
+
+## D-018 — Digital sign-off: password re-entry, two-person rule, content hash
+- **Alternatives:** a simple "Sign" button; PKI/qualified e-signatures.
+- **Why:** in aviation, the person who did the work and the person who releases
+  it should be different people (independent inspection). We enforce that in
+  the service **and** with a DB `CHECK` constraint
+  (`inspector_signed_by <> tech_signed_by`).
+  Signing asks for the user's password again, so it's a deliberate act by
+  the account owner, not a click on someone else's unlocked screen.
+  At sign-off we store a SHA-256 hash of exactly what was signed (checklist
+  items, who ticked them, notes). The inspector's signature hashes the
+  technician's signature, forming a small chain. If anyone edits the checklist
+  in the database afterwards, `GET /work-orders/{id}/verify/` reports it and
+  certification is refused (tested). Real PKI signatures would be the next
+  step for regulatory use. Here the goal is to show tamper evidence without
+  certificate infrastructure.

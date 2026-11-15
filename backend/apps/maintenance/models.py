@@ -85,6 +85,9 @@ class MaintenanceRecord(models.Model):
         settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.PROTECT, related_name="+"
     )
     notes = models.TextField(blank=True)
+    work_order = models.ForeignKey(
+        "workorders.WorkOrder", null=True, blank=True, on_delete=models.PROTECT, related_name="records"
+    )
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:

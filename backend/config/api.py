@@ -13,6 +13,7 @@ from apps.fleet.views import (
     PartTypeViewSet,
 )
 from apps.maintenance.views import MaintenanceRecordViewSet, MaintenanceRuleViewSet
+from apps.workorders.views import WorkOrderViewSet
 
 router = DefaultRouter()
 router.register("users", UserViewSet, basename="user")
@@ -25,3 +26,4 @@ router.register("flights", FlightLogViewSet, basename="flight")
 router.register("maintenance-rules", MaintenanceRuleViewSet, basename="maintenance-rule")
 router.register("maintenance-records", MaintenanceRecordViewSet, basename="maintenance-record")
 router.register("alerts", AlertViewSet, basename="alert")
+router.register("work-orders", WorkOrderViewSet, basename="work-order")
