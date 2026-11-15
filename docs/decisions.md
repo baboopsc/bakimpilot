@@ -221,3 +221,42 @@ grounding work orders as a GROUNDED reason.)
   certification is refused (tested). Real PKI signatures would be the next
   step for regulatory use. Here the goal is to show tamper evidence without
   certificate infrastructure.
+
+## D-019 — Inventory as a ledger of stock movements
+- **Alternatives:** a single editable `quantity` field.
+- **Why:** "why do we have 3 filters when we bought 10?" can only be answered
+  if every change is recorded. `StockMovement` rows (receipt / issue / return /
+  adjustment, with who, why and which work order) are the history, like a bank
+  statement. `quantity_on_hand` is the running balance: updated under a row
+  lock with `F()`, never editable through the API or admin, and protected by a
+  DB `CHECK (quantity_on_hand >= 0)`. Adjustments (stock counts) require a
+  written reason. Only the assigned technician can draw parts for a work
+  order, and only while it's in progress, so parts usage is traceable to
+  the job. When a movement crosses the reorder point, the low-stock check is
+  queued **after commit** (`transaction.on_commit`), so an alert never refers
+  to a change that was rolled back. If the broker is down, the stock change
+  still succeeds and the daily check catches up.
+
+## D-020 — Dashboard: one aggregated endpoint; readiness counts ACTIVE aircraft
+- **Alternatives:** the frontend calls 6 endpoints and aggregates; a separate
+  analytics store.
+- **Why:** the dashboard is the most-opened page, so one request returning
+  everything it needs is faster and simpler to cache later. It reuses the same
+  engine as the due list, so numbers on the dashboard can never disagree with
+  the due list.
+  **Readiness % = (AIRWORTHY + ATTENTION) / ACTIVE aircraft.** Stored aircraft
+  are excluded (a parked aircraft isn't a readiness failure). ATTENTION
+  counts as ready: it may fly today and just needs planning. With zero active
+  aircraft the value is `null`, not a division error.
+  The 30-day timeline uses projected due dates (D-015). Overdue items are pinned
+  to today so they're never hidden in the past.
+
+## D-021 — Demo data through the real services
+- **Alternatives:** JSON fixtures; raw SQL inserts.
+- **Why:** `python manage.py seed_demo --reset` builds a 6-aircraft fleet with
+  60 days of flights, baselines, work orders in every state and stock, by
+  calling the same service functions the API uses. So the demo exercises the
+  real rules (it caught a life-limit check during development), counters
+  verify cleanly (`verify_counters`), and the audit log looks like real use.
+  It's deterministic (fixed random seed). One aircraft (TB2-T003) gets a
+  creeping vibration/temperature trend for the anomaly detector to find.

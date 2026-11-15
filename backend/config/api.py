@@ -12,6 +12,7 @@ from apps.fleet.views import (
     InstallationViewSet,
     PartTypeViewSet,
 )
+from apps.inventory.views import SparePartViewSet, StockMovementViewSet
 from apps.maintenance.views import MaintenanceRecordViewSet, MaintenanceRuleViewSet
 from apps.workorders.views import WorkOrderViewSet
 
@@ -27,3 +28,5 @@ router.register("maintenance-rules", MaintenanceRuleViewSet, basename="maintenan
 router.register("maintenance-records", MaintenanceRecordViewSet, basename="maintenance-record")
 router.register("alerts", AlertViewSet, basename="alert")
 router.register("work-orders", WorkOrderViewSet, basename="work-order")
+router.register("spare-parts", SparePartViewSet, basename="spare-part")
+router.register("stock-movements", StockMovementViewSet, basename="stock-movement")

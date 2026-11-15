@@ -177,7 +177,7 @@ LLM_API_KEY = env("LLM_API_KEY", default="")
 LLM_BASE_URL = env("LLM_BASE_URL", default="")
 EMBEDDING_PROVIDER = env("EMBEDDING_PROVIDER", default="mock")  # mock | openai
 EMBEDDING_MODEL = env("EMBEDDING_MODEL", default="")
-EMBEDDING_DIM = 384  # fixed: it is baked into the database column (D-020)
+EMBEDDING_DIM = 384  # fixed: it is baked into the database column (D-023)
 
 LOGGING = {
     "version": 1,
