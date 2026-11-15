@@ -85,3 +85,47 @@ Newest entries at the bottom. IDs are referenced from code comments (e.g. `D-005
   which is what an internal enterprise system should run. Django's admin, ORM,
   migrations and auth come built in. FastAPI would mean assembling those pieces
   ourselves.
+
+## D-010 — `PartType` (catalog) separate from `Component` (serialized unit)
+- **Alternatives:** one `Component` table that repeats the life limits on every row.
+- **Why:** the manufacturer sets life limits per **part number**, not per unit.
+  Storing them once on `PartType` means 20 engines share one definition, and
+  changing a limit (e.g. after a service bulletin) is a single update. Each
+  `Component` holds only what is unique to it: serial number, manufacture date,
+  usage. Three independent limits (hours, cycles, days), each optional, because
+  real parts are limited differently. A battery ages by calendar time, landing
+  gear by cycles, an engine by hours.
+
+## D-011 — Running hour/cycle totals are stored (denormalised) and verifiable
+- **Alternatives:** compute usage on every read by summing flight logs over the
+  component's install periods.
+- **Why:** usage is read constantly (due list, dashboard, every component page)
+  but changes only when a flight is logged. Summing history on every read gets
+  slower as the fleet grows. So `log_flight` updates the totals once, inside
+  a transaction, with `F()` expressions (the DB does `x = x + n`, so no lost updates).
+  To protect against the classic risk of denormalised data (drift), the
+  totals can always be **rebuilt from first principles**:
+  `expected_component_usage()` and the `verify_counters` management command. A
+  test proves they agree. The aircraft row is locked with `SELECT … FOR UPDATE`
+  during a flight insert, so concurrent inserts for the same aircraft run one at
+  a time; another test fires 8 parallel threads and checks nothing is lost.
+
+## D-012 — Install history as time intervals, with DB-enforced integrity
+- **Alternatives:** a single `current_aircraft` foreign key on `Component`.
+- **Why:** a foreign key only tells you where a part is *now*. Maintenance needs
+  *where it was then*: a back-dated flight must credit the components that were
+  installed at take-off time, and an investigator asks "which aircraft has
+  this serial number flown on?". So each install is an `Installation` row with
+  `installed_at` / `removed_at`. Two **partial unique indexes** in PostgreSQL
+  (`WHERE removed_at IS NULL`) guarantee a part is never installed twice and a
+  position never holds two parts, even if some future code skips the service
+  checks (there's a test that bypasses the service and gets an `IntegrityError`).
+
+## D-013 — Flight logs are immutable through the API
+- **Alternatives:** allow PATCH/DELETE and recalculate counters.
+- **Why:** flight logs drive component life, so a silent edit could hide an
+  overdue part. Like accounting ledgers, corrections should be explicit new
+  entries, not overwrites. Create + read only; the admin can't add or change
+  them either. Technicians may log flights (they record post-flight data on
+  the line), along with planners and admins. Flights in the future, overlapping
+  flights, and flights on stored/retired aircraft are rejected.

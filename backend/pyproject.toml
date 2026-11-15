@@ -5,4 +5,4 @@ extend-exclude = ["**/migrations/*"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "B", "UP", "DJ"]
-ignore = ["DJ001"]
+ignore = ["DJ001", "E501"]  # line length is handled by `ruff format`
