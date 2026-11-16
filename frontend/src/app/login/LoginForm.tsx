@@ -8,6 +8,15 @@ import { Button, Field, Input } from "@/components/ui";
 import { ApiError } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 
+// Seeded by `manage.py seed_demo`. Set NEXT_PUBLIC_DEMO_LOGIN=false to hide the demo shortcuts.
+export const DEMO_PASSWORD = "BakimPilot2026!";
+const DEMO_ENABLED = process.env.NEXT_PUBLIC_DEMO_LOGIN !== "false";
+const DEMO_ROLES = [
+  { username: "admin", label: "Admin" },
+  { username: "tech", label: "Technician" },
+  { username: "viewer", label: "Viewer" },
+] as const;
+
 export function LoginForm() {
   const { login, user, ready } = useAuth();
   const router = useRouter();
@@ -25,12 +34,11 @@ export function LoginForm() {
     if (ready && user) router.replace(next);
   }, [ready, user, router, next]);
 
-  async function submit(e: React.FormEvent) {
-    e.preventDefault();
+  async function signIn(user: string, pass: string) {
     setError("");
     setBusy(true);
     try {
-      await login(username, password);
+      await login(user, pass);
       router.replace(next);
     } catch (err) {
       if (err instanceof ApiError && err.status === 401) setError("Wrong username or password.");
@@ -39,6 +47,11 @@ export function LoginForm() {
     } finally {
       setBusy(false);
     }
+  }
+
+  function submit(e: React.FormEvent) {
+    e.preventDefault();
+    void signIn(username, password);
   }
 
   return (
@@ -68,9 +81,37 @@ export function LoginForm() {
       <Button type="submit" variant="primary" className="w-full" loading={busy} disabled={!username || !password}>
         Log in
       </Button>
-      <p className="text-xs text-muted">
-        Demo users: admin, planner, tech, viewer (password <code className="font-mono">BakimPilot2026!</code>)
-      </p>
+      {DEMO_ENABLED && (
+        <div className="space-y-2 border-t border-border pt-4">
+          <Button
+            type="button"
+            className="w-full"
+            disabled={busy}
+            onClick={() => void signIn("planner", DEMO_PASSWORD)}
+          >
+            Try the demo (one click)
+          </Button>
+          <p className="text-xs text-muted">
+            Logs in as the maintenance planner. Or try another role:{" "}
+            {DEMO_ROLES.map((r, i) => (
+              <span key={r.username}>
+                {i > 0 && " · "}
+                <button
+                  type="button"
+                  className="underline underline-offset-2 hover:text-fg disabled:opacity-50"
+                  disabled={busy}
+                  onClick={() => void signIn(r.username, DEMO_PASSWORD)}
+                >
+                  {r.label}
+                </button>
+              </span>
+            ))}
+          </p>
+          <p className="text-xs text-muted">
+            Demo password for every user: <code className="font-mono">{DEMO_PASSWORD}</code>
+          </p>
+        </div>
+      )}
     </form>
   );
 }

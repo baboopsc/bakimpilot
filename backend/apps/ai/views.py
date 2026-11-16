@@ -2,7 +2,7 @@ import hashlib
 import time
 
 from django.db import transaction
-from django.http import FileResponse
+from django.http import FileResponse, Http404
 from drf_spectacular.types import OpenApiTypes
 from drf_spectacular.utils import extend_schema
 from rest_framework import mixins, serializers, status, viewsets
@@ -105,7 +105,11 @@ class ManualDocumentViewSet(mixins.CreateModelMixin, mixins.DestroyModelMixin, v
     def file(self, request, pk=None):
         """Serve the PDF so the UI can open it at the cited page (#page=N)."""
         doc = self.get_object()
-        return FileResponse(doc.file.open("rb"), content_type="application/pdf", filename=f"{doc.title}.pdf")
+        try:
+            handle = doc.file.open("rb")
+        except FileNotFoundError:  # e.g. an ephemeral disk was wiped; the chunks in the DB survive
+            raise Http404("The PDF file is missing on the server. Re-upload the manual.") from None
+        return FileResponse(handle, content_type="application/pdf", filename=f"{doc.title}.pdf")
 
     @action(detail=True, methods=["post"])
     def reingest(self, request, pk=None):

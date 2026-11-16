@@ -1,5 +1,7 @@
 # Deploying BakımPilot
 
+> For the free **Render + Neon + Vercel** demo, see the *Deploy* section of the README.
+
 The production setup is the same `docker-compose.yml` used locally, plus
 `docker-compose.prod.yml`, which adds **Caddy** for HTTPS and stops exposing
 internal ports. Any Linux VM with Docker works (e.g. a 2 vCPU / 4 GB VPS).

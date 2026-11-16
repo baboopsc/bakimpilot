@@ -17,7 +17,7 @@ x-backend: &backend
     REDIS_URL: redis://redis:6379/0
     REFRESH_COOKIE_SECURE: ${REFRESH_COOKIE_SECURE:-true}
     MEDIA_ROOT: /app/media
-    LLM_PROVIDER: ${LLM_PROVIDER:-mock}
+    LLM_PROVIDER: ${LLM_PROVIDER:-auto}
     LLM_MODEL: ${LLM_MODEL:-}
     LLM_API_KEY: ${LLM_API_KEY:-}
     EMBEDDING_PROVIDER: ${EMBEDDING_PROVIDER:-mock}

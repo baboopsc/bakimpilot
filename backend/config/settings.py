@@ -21,6 +21,9 @@ environ.Env.read_env(BASE_DIR / ".env")
 SECRET_KEY = env("DJANGO_SECRET_KEY", default="dev-only-insecure-key-change-me-0123456789abcdef")
 DEBUG = env.bool("DJANGO_DEBUG", default=False)
 ALLOWED_HOSTS = env.list("DJANGO_ALLOWED_HOSTS", default=["localhost", "127.0.0.1"])
+# Render sets this to the service's public hostname (e.g. bakimpilot-api.onrender.com). D-034.
+if RENDER_HOST := env("RENDER_EXTERNAL_HOSTNAME", default=""):
+    ALLOWED_HOSTS.append(RENDER_HOST)
 CSRF_TRUSTED_ORIGINS = env.list("DJANGO_CSRF_TRUSTED_ORIGINS", default=[])
 
 INSTALLED_APPS = [
@@ -86,6 +89,11 @@ DATABASES = {
         default="postgres://bakimpilot:bakimpilot@localhost:5432/bakimpilot",
     )
 }
+# Reuse DB connections for a minute instead of opening one per request (matters
+# with a remote managed DB like Neon, where each TLS handshake costs ~50-100 ms).
+# Health checks drop a connection the server closed meanwhile (Neon scales to zero).
+DATABASES["default"]["CONN_MAX_AGE"] = env.int("DB_CONN_MAX_AGE", default=60)
+DATABASES["default"]["CONN_HEALTH_CHECKS"] = True
 
 AUTH_USER_MODEL = "accounts.User"
 
@@ -159,6 +167,9 @@ CORS_ALLOW_CREDENTIALS = True
 CELERY_BROKER_URL = env("REDIS_URL", default="redis://localhost:6379/0")
 CELERY_RESULT_BACKEND = CELERY_BROKER_URL
 CELERY_TIMEZONE = TIME_ZONE
+# Eager mode runs every .delay() inline in the calling process: no Redis, no
+# worker. Used by the free demo deployment and by tests; Docker Compose keeps
+# the real broker + worker + beat. Trade-offs are in D-035.
 CELERY_TASK_ALWAYS_EAGER = env.bool("CELERY_TASK_ALWAYS_EAGER", default=False)
 CELERY_BEAT_SCHEDULE = {
     "due-check-hourly": {
@@ -183,9 +194,10 @@ MAINTENANCE_DUE_SOON_RATIO = env.float("MAINTENANCE_DUE_SOON_RATIO", default=0.9
 INGEST_TOKEN = env("INGEST_TOKEN", default="")
 
 # --- AI -------------------------------------------------------------------
-LLM_PROVIDER = env("LLM_PROVIDER", default="mock")  # mock | anthropic
+# auto (default) = Claude when an API key is set, otherwise the offline mock. D-036.
+LLM_PROVIDER = env("LLM_PROVIDER", default="auto")  # auto | mock | anthropic
 LLM_MODEL = env("LLM_MODEL", default="")
-LLM_API_KEY = env("LLM_API_KEY", default="")  # empty → SDK falls back to ANTHROPIC_API_KEY
+LLM_API_KEY = env("LLM_API_KEY", default="") or env("ANTHROPIC_API_KEY", default="")
 LLM_BASE_URL = env("LLM_BASE_URL", default="")
 EMBEDDING_PROVIDER = env("EMBEDDING_PROVIDER", default="mock")  # mock (see D-023)
 EMBEDDING_DIM = 384  # fixed: it is baked into the database column (D-023)
@@ -197,8 +209,9 @@ LOGGING = {
     "root": {"handlers": ["console"], "level": env("LOG_LEVEL", default="INFO")},
 }
 
-# HTTPS redirect and HSTS are done by the Caddy reverse proxy in front of Django
-# (deploy/Caddyfile), so Django's own versions of those checks are silenced.
+# HTTPS redirect and HSTS are done by the platform in front of Django (Caddy on
+# the VM, deploy/Caddyfile; Render's edge on the free demo), so Django's own
+# versions of those checks are silenced.
 SILENCED_SYSTEM_CHECKS = ["security.W004", "security.W008"]
 
 if not DEBUG:

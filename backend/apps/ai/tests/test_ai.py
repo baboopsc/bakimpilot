@@ -6,7 +6,7 @@ import pytest
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.utils import timezone
 
-from apps.ai import anomaly, nlquery, rag
+from apps.ai import anomaly, nlquery, providers, rag
 from apps.ai.models import AIRequestLog, ManualDocument
 from apps.ai.pdfgen import build_pdf
 from apps.ai.providers import AnthropicProvider, HashingEmbedder, LLMProvider, LLMResult, LLMUnavailable
@@ -191,6 +191,26 @@ def test_anthropic_provider_request_shape_and_text_extraction():
     assert sent["model"] == "claude-opus-5-5"
     assert sent["fallbacks"] == "default" and "server-side-fallback-2026-07-01" in sent["betas"]
     assert "thinking" not in sent and "temperature" not in sent  # not allowed on this model
+
+
+def test_auto_provider_uses_mock_without_a_key_and_claude_with_one():
+    assert providers.resolve_provider("auto", "") == "mock"
+    assert providers.resolve_provider("auto", "sk-ant-test") == "anthropic"
+    assert providers.resolve_provider("mock", "sk-ant-test") == "mock"  # explicit choice wins
+    providers._build.cache_clear()
+    assert providers._build("auto", "", "", "").is_mock
+
+
+def test_anthropic_without_credentials_degrades_to_mock(monkeypatch):
+    def boom(self, **kwargs):
+        raise RuntimeError("no credentials")
+
+    monkeypatch.setattr(AnthropicProvider, "__init__", boom)
+    providers._build.cache_clear()
+    try:
+        assert providers._build("anthropic", "", "", "").is_mock
+    finally:
+        providers._build.cache_clear()
 
 
 def test_anthropic_provider_json_and_refusal():

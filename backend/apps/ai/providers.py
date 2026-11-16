@@ -2,7 +2,7 @@
 Pluggable LLM and embedding providers (D-022, D-023).
 
 Configured with environment variables:
-    LLM_PROVIDER=mock | anthropic        (default: mock)
+    LLM_PROVIDER=auto | mock | anthropic (default: auto = anthropic if a key is set, else mock)
     LLM_MODEL=claude-opus-5-5            (anthropic only; this is the default)
     LLM_API_KEY=...                      (or ANTHROPIC_API_KEY / an `ant auth login` profile)
     EMBEDDING_PROVIDER=mock
@@ -147,13 +147,25 @@ class AnthropicProvider(LLMProvider):
             raise LLMUnavailable("model returned invalid JSON") from exc
 
 
+def resolve_provider(provider: str, api_key: str) -> str:
+    """'auto' picks Claude only when there is a key, so a deploy without one just works (D-036)."""
+    if provider == "auto":
+        return "anthropic" if api_key else "mock"
+    return provider
+
+
 @lru_cache(maxsize=4)
 def _build(provider: str, model: str, api_key: str, base_url: str) -> LLMProvider:
+    provider = resolve_provider(provider, api_key)
     if provider == "mock":
         return MockProvider()
     if provider == "anthropic":
-        return AnthropicProvider(model=model or None, api_key=api_key or None, base_url=base_url or None)
-    raise ValueError(f"Unknown LLM_PROVIDER {provider!r} (expected 'mock' or 'anthropic')")
+        try:
+            return AnthropicProvider(model=model or None, api_key=api_key or None, base_url=base_url or None)
+        except Exception as exc:  # e.g. no key and no `ant` profile: degrade, don't crash every AI page
+            log.warning("Anthropic provider unavailable (%s); using the offline mock provider", exc)
+            return MockProvider()
+    raise ValueError(f"Unknown LLM_PROVIDER {provider!r} (expected 'auto', 'mock' or 'anthropic')")
 
 
 def get_llm() -> LLMProvider:

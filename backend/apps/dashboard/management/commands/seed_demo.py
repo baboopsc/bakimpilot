@@ -3,6 +3,8 @@ Fill the database with a realistic demo fleet.
 
     python manage.py seed_demo          # only if the DB has no aircraft yet
     python manage.py seed_demo --reset  # wipe everything first (demo/dev only!)
+    python manage.py seed_demo --if-empty  # deploy hook: seed once, later boots just
+                                           # restore the demo PDF (ephemeral disk, D-034)
 
 Everything goes through the real service functions, so counters, audit log,
 alerts and signatures are exactly what real usage would produce.
@@ -144,11 +146,22 @@ class Command(BaseCommand):
 
     def add_arguments(self, parser):
         parser.add_argument("--reset", action="store_true", help="Delete ALL data first.")
+        parser.add_argument(
+            "--if-empty",
+            action="store_true",
+            help="Do nothing (except restore missing demo files) when data already exists. Safe on every deploy.",
+        )
 
-    def handle(self, *args, reset=False, **options):
+    def handle(self, *args, reset=False, if_empty=False, **options):
         if reset:
             call_command("flush", interactive=False)
         elif Aircraft.objects.exists():
+            if if_empty:
+                restored = self._restore_manual_file()
+                self.stdout.write(
+                    f"Demo data already present; skipped seeding{' (restored demo PDF)' if restored else ''}."
+                )
+                return
             raise CommandError("Database already has aircraft. Use --reset to wipe it first.")
 
         self.rng = random.Random(42)
@@ -397,13 +410,30 @@ class Command(BaseCommand):
         """A small fictional manual so the RAG assistant has something to answer from."""
         pdf = build_pdf(DEMO_MANUAL)
         doc = ManualDocument(
-            title="TB2 Line Maintenance Manual (demo)",
+            title=MANUAL_TITLE,
             aircraft_model="TB2",
             uploaded_by=planner,
             sha256=hashlib.sha256(pdf).hexdigest(),
         )
-        doc.file.save("tb2-line-maintenance-demo.pdf", ContentFile(pdf), save=True)
+        doc.file.save(MANUAL_FILENAME, ContentFile(pdf), save=True)
         rag.ingest(doc)
+
+    def _restore_manual_file(self) -> bool:
+        """
+        Free hosts (Render) wipe the local disk on every restart, but the DB
+        (Neon) keeps the ManualDocument row and its chunks. Rebuild the demo
+        PDF so "open at page N" keeps working. The PDF is generated from
+        DEMO_MANUAL, so it's the same document the chunks came from.
+        """
+        doc = ManualDocument.objects.filter(title=MANUAL_TITLE).first()
+        if doc is None or (doc.file and doc.file.storage.exists(doc.file.name)):
+            return False
+        doc.file.save(MANUAL_FILENAME, ContentFile(build_pdf(DEMO_MANUAL)), save=True)
+        return True
+
+
+MANUAL_TITLE = "TB2 Line Maintenance Manual (demo)"
+MANUAL_FILENAME = "tb2-line-maintenance-demo.pdf"
 
 
 DEMO_MANUAL = [
